@@ -1,0 +1,78 @@
+apis:
+  - apiName1
+  - apiName2:
+      operations: []
+      diagnostics:
+        - diagnosticName1
+        - diagnosticName2
+      schemas: []
+      releases:
+        - releaseName1
+
+backends:
+  - backendName1
+  - backendName2
+
+gateways:
+  - gatewayName1
+
+diagnostics:
+  - diagnosticName1
+  - diagnosticName2
+
+groups:
+  - groupName1
+
+loggers:
+  - loggerName1
+  - loggerName2
+
+namedValues:
+  - namedValueName1
+  - namedValueName2
+
+products:
+  - productName1
+  - productName2
+
+subscriptions:
+  - subscriptionName1
+  - subscriptionName2
+
+tags:
+  - tagName1
+  - tagName2
+
+policyFragments:
+  - policyFragment1
+  - policyFragment2
+
+versionSets:
+  - versionSetName1
+
+workspaces:
+  - workspaceName1:
+      apis:
+        - workspaceApiName1:
+            operations: []
+            diagnostics: []
+            schemas: []
+            releases:
+              - workspaceReleaseName1
+      backends:
+        - workspaceBackendName1
+      diagnostics: []
+      groups: []
+      loggers:
+        - workspaceLoggerName1
+      namedValues:
+        - workspaceNamedValueName1
+      policyFragments:
+        - workspacePolicyFragmentName1
+      products:
+        - workspaceProductName1
+      subscriptions: []
+      tags:
+        - workspaceTagName1
+      versionSets:
+        - workspaceVersionSetName1

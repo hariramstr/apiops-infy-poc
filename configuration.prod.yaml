@@ -1,0 +1,6 @@
+# Prod environment overrides for the APIOps publisher.
+# Minimal for the POC: the test API (Swagger Petstore) uses a shared public
+# backend, so no per-environment override is required. Add named values,
+# backends, loggers, diagnostics, or App Insights overrides here as real
+# environment-specific APIs are introduced.
+apimServiceName: apim-apiops-prod-poc
