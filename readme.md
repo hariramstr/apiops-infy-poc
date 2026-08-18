@@ -76,38 +76,99 @@ Merging to `main` deploys automatically. That's it.
 
 ## Repository structure
 
+This is the full layout. Every folder is explained in the tables below.
+
 ```text
-apimartifacts/                     # Everything that gets published to APIM
-  apis/
-    swagger-petstore/              # Reference example — copy this pattern
-      apiInformation.json          # API name, path, service URL
-      specification.json           # The OpenAPI/Swagger definition
-      policy.xml                   # API-wide rules (inbound/backend/outbound)
-      operations/
-        getPetById/policy.xml      # Rules for a single operation
-  backends/                        # Where APIs forward requests to
-  named values/                    # Per-environment settings ({{tokens}})
-  tags/                            # Labels to group/govern APIs
-  policy fragments/                # Reusable policy snippets
-configuration.prod.yaml            # Values that differ in production
-.github/workflows/                 # The publisher/extractor pipelines
-tools/scripts/                     # Helper scripts (scaffold + validate)
-docs/                              # Admin setup guides
+apiops-infy-poc/
+├─ apimartifacts/                       # SOURCE OF TRUTH — everything published to APIM
+│  ├─ apis/                             # One folder per API
+│  │  └─ swagger-petstore/             # Reference example — copy this pattern
+│  │     ├─ apiInformation.json        # API name, URL path, backend service URL
+│  │     ├─ specification.json         # The OpenAPI/Swagger definition
+│  │     ├─ policy.xml                 # API-wide rules (inbound/backend/outbound)
+│  │     └─ operations/                # One folder per endpoint (name = operationId)
+│  │        ├─ listPets/policy.xml     # Rules for just this endpoint
+│  │        ├─ createPet/policy.xml
+│  │        ├─ getPetById/policy.xml
+│  │        └─ deletePet/policy.xml
+│  ├─ backends/                         # Named targets an API forwards requests to
+│  │  └─ petstore-backend/
+│  │     └─ backendInformation.json    # Backend name + absolute URL
+│  ├─ named values/                     # Reusable settings referenced in policies as {{name}}
+│  │  ├─ petstore-backend-url/
+│  │  │  └─ namedValueInformation.json
+│  │  └─ platform-owner-team/
+│  │     └─ namedValueInformation.json
+│  ├─ policy fragments/                 # Reusable policy snippets shared by many APIs
+│  │  └─ correlation-id/
+│  │     ├─ policy.xml                 # The snippet body
+│  │     └─ policyFragmentInformation.json  # Fragment name/description
+│  └─ tags/                             # Labels to group & govern APIs
+│     ├─ public/
+│     │  ├─ tagInformation.json        # The tag itself
+│     │  └─ apis/swagger-petstore/
+│     │     └─ tagApiInformation.json  # Attaches this tag to that API
+│     └─ partner/
+│        ├─ tagInformation.json
+│        └─ apis/swagger-petstore/
+│           └─ tagApiInformation.json
+├─ .github/                             # GitHub automation
+│  ├─ workflows/                        # The CI/CD pipelines (GitHub Actions)
+│  │  ├─ run-publisher.yaml            # Entry pipeline: push → publish to dev then prod
+│  │  ├─ run-publisher-with-env.yaml   # Reusable job that runs the APIOps publisher
+│  │  └─ run-extractor.yaml            # Pulls existing APIM config back into the repo
+│  ├─ CODEOWNERS                        # Who must review changes to which folders
+│  └─ pull_request_template.md          # Checklist shown on every PR
+├─ docs/                                # Admin/setup guides (one-time setup)
+│  ├─ provision-azure.md               # Create the Azure resources
+│  └─ environment-setup.md             # Configure GitHub secrets/variables/environments
+├─ tools/                               # Local helper tooling
+│  └─ scripts/
+│     ├─ New-ApiScaffold.ps1           # Generates a ready-to-edit API folder
+│     └─ Validate-Artifacts.ps1        # Checks your files before you push
+├─ .vscode/
+│  └─ tasks.json                        # VS Code menu shortcuts for the scripts above
+├─ configuration.prod.yaml              # Prod overrides (values that differ in production)
+├─ configuration.extractor.yaml         # Settings for the extractor pipeline
+├─ .gitignore
+└─ readme.md                            # This file
 ```
 
-### What each file means
+### Top-level folders
+
+| Folder | Purpose |
+|---|---|
+| `apimartifacts/` | **The source of truth.** Every file here describes part of your APIM and is what the pipeline publishes. This is where API teams work. |
+| `.github/` | GitHub automation — the pipelines that publish your changes, plus review rules (`CODEOWNERS`) and the PR checklist. |
+| `docs/` | One-time **admin** setup guides (create Azure resources, wire up GitHub). You rarely touch these after setup. |
+| `tools/` | Helper scripts you run locally to scaffold a new API and to validate your files before pushing. |
+| `.vscode/` | Editor convenience — Run Task menu entries that call the scripts in `tools/`. |
+
+### Inside `apimartifacts/` (the folders you edit)
+
+| Folder | What it holds | Nested folders |
+|---|---|---|
+| `apis/` | One sub-folder per API. | `<api>/operations/<operationId>/` — per-endpoint policies. Folder name must match the `operationId` in the spec. |
+| `backends/` | Named targets an API routes to (one sub-folder per backend). | `<backend>/` holds `backendInformation.json` (name + absolute URL). |
+| `named values/` | Reusable/secret settings referenced in policies as `{{name}}`; overridable per environment. | `<name>/` holds `namedValueInformation.json`. |
+| `policy fragments/` | Reusable policy snippets many APIs can `include-fragment`. | `<fragment>/` holds the snippet `policy.xml` + its info file. |
+| `tags/` | Labels to group and govern APIs. | `<tag>/apis/<api>/` attaches that tag to an API. |
+
+### Per-API files (inside `apimartifacts/apis/<name>/`)
 
 | File / folder | In plain words |
 |---|---|
-| `apis/<name>/apiInformation.json` | The API's basic details (display name, URL path, backend service URL). |
-| `apis/<name>/specification.json` | Your API definition (the Swagger/OpenAPI document). |
-| `apis/<name>/policy.xml` | Rules applied to the whole API (headers, routing, auth). |
-| `apis/<name>/operations/<op>/policy.xml` | Rules for one endpoint only (e.g. caching, rate limits). |
-| `backends/<name>/backendInformation.json` | A named target the API forwards to. |
-| `named values/<name>/namedValueInformation.json` | A setting referenced in policies as `{{name}}`; overridable per environment. |
-| `tags/<name>/…` | Labels used to group and govern APIs. |
-| `policy fragments/<name>/…` | Reusable policy snippets shared by many APIs. |
-| `configuration.prod.yaml` | Values that differ in production (e.g. a prod backend URL). |
+| `apiInformation.json` | The API's basic details (display name, URL path, backend service URL). |
+| `specification.json` | Your API definition (the Swagger/OpenAPI document). |
+| `policy.xml` | Rules applied to the whole API (headers, routing, auth). |
+| `operations/<op>/policy.xml` | Rules for one endpoint only (e.g. caching, rate limits). |
+
+### Root configuration files
+
+| File | In plain words |
+|---|---|
+| `configuration.prod.yaml` | Production overrides — values that differ in prod (e.g. the prod APIM name, a prod backend URL). |
+| `configuration.extractor.yaml` | Settings used by the extractor pipeline when pulling APIM config back into the repo. |
 
 ## Add a new API
 
