@@ -27,18 +27,18 @@ jobs:
     environment: ${{ inputs.API_MANAGEMENT_ENVIRONMENT }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
       - name: Validate publisher configuration
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
-          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
           ARTIFACTS_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
           CONFIGURATION_YAML_PATH_INPUT: ${{ inputs.CONFIGURATION_YAML_PATH }}
         run: |
@@ -54,7 +54,7 @@ jobs:
             [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
           })
           if ($missingVariables.Count -gt 0) {
-            throw "Missing ${{ inputs.API_MANAGEMENT_ENVIRONMENT }} environment secrets: $($missingVariables -join ', ')"
+            throw "Missing ${{ inputs.API_MANAGEMENT_ENVIRONMENT }} environment configuration: $($missingVariables -join ', ')"
           }
           if (-not (Test-Path -LiteralPath $env:ARTIFACTS_PATH -PathType Container)) {
             throw "API Ops artifacts folder not found: $env:ARTIFACTS_PATH"
@@ -68,9 +68,9 @@ jobs:
         shell: pwsh
     
       # Run Spectral
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm install -g @stoplight/spectral-cli
       - run: spectral lint "${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}/apis/**/specification.{json,yml,yaml}" --ruleset https://raw.githubusercontent.com/connectedcircuits/devops-api-linter/main/rules.yaml
 
@@ -85,17 +85,17 @@ jobs:
         # specify environment specific secrets to be replaced. For example the QA environment could have a different set sercrets to
         # replace within the configuration.[environment].yaml file
         env:
-          testSecretValue: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
+          testSecretValue: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
 
       - name: Run publisher without Config Yaml but with Commit ID
         if: ( inputs.CONFIGURATION_YAML_PATH == '' &&  inputs.COMMIT_ID != '')
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
-          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
           API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
           COMMIT_ID: ${{ inputs.COMMIT_ID }}
         run: |
@@ -146,12 +146,12 @@ jobs:
       - name: Run publisher without Config Yaml or Commit ID
         if: ( inputs.CONFIGURATION_YAML_PATH == '' &&  inputs.COMMIT_ID == '')
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
-          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
           API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
         run: |
           Set-StrictMode -Version Latest
@@ -201,12 +201,12 @@ jobs:
       - name: Run publisher with Config Yaml and Commit id
         if: ( inputs.CONFIGURATION_YAML_PATH != '' &&  inputs.COMMIT_ID != '')
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
-          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
           API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
           CONFIGURATION_YAML_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.CONFIGURATION_YAML_PATH }}
           COMMIT_ID: ${{ inputs.COMMIT_ID }}
@@ -258,12 +258,12 @@ jobs:
       - name: Run publisher with Config Yaml but without Commit id
         if: ( inputs.CONFIGURATION_YAML_PATH != '' &&  inputs.COMMIT_ID == '')
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
-          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
           API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
           CONFIGURATION_YAML_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.CONFIGURATION_YAML_PATH }}
         run: |
