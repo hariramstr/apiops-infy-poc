@@ -267,7 +267,7 @@ Actions tab):
 |---|---|
 | Pipeline fails: *"Missing dev environment configuration: AZURE_CLIENT_SECRET"* | The secret was added as an **Environment variable** instead of an **Environment secret**. See [environment-setup.md](docs/environment-setup.md). |
 | Spectral step: *"No files found to lint"* | The API folder has no `specification.*` file, or the operation folder names don't match your `operationId`s. |
-| Publish fails: *"Cannot find a property '<name>'"* | The policy references a named value or policy fragment that isn't in the target APIM yet. Run the publisher once in **Publish all** mode, or avoid referencing artifacts that aren't published. |
+| Publish fails: *"Cannot find a property '<name>'"* | The policy references a named value or policy fragment that isn't in the target APIM yet. The pipeline auto-bootstraps fresh environments; if you still hit this, the referenced artifact is missing from the repo — add it, or run the publisher once in **Publish all** mode. |
 | Operation policy not applied | The `operations/<op>/` folder name must equal the `operationId` in the spec. |
 | Prod job never runs | Prod is waiting for a required reviewer, or the `prod` environment's branch rule doesn't include `main`. |
 | `pwsh: command not found` | Install [PowerShell 7](https://aka.ms/powershell). |
@@ -292,13 +292,13 @@ Do these once before the pipeline can publish:
    [docs/provision-azure.md](docs/provision-azure.md).
 2. **Configure GitHub environments** (secrets, variables, prod protection) —
    [docs/environment-setup.md](docs/environment-setup.md).
-3. **Bootstrap each new APIM once** by running the publisher in **Publish all**
-   mode (Actions → Run publisher → Run workflow → `COMMIT_ID_CHOICE =
-   publish-all-artifacts-in-repo`). This creates the shared artifacts (policy
-   fragments, named values, backends, tags) that API policies depend on. The
-   pipeline enforces this automatically: a **bootstrap guard** blocks
-   "Publish changes" runs against an un-bootstrapped environment and tells you
-   to run Publish all first.
+
+> **Fresh environments bootstrap themselves.** The first time you publish to a
+> brand-new APIM (dev, prod, or any new environment), the pipeline detects that
+> the shared artifacts (policy fragments, named values, backends, tags) are
+> missing and automatically runs a one-time **Publish all** to seed them before
+> the incremental publish. No manual step required — every environment behaves
+> the same way.
 
 ## Handy links
 - Reference example to copy: [apimartifacts/apis/swagger-petstore/](apimartifacts/apis/swagger-petstore)
