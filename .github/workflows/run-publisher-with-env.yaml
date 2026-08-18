@@ -66,7 +66,68 @@ jobs:
             }
           }
         shell: pwsh
-    
+
+      # Guardrail: a brand-new APIM has none of the shared artifacts (policy
+      # fragments, named values) that API/operation policies reference. In
+      # "Publish changes" mode the publisher only pushes the last commit, so those
+      # dependencies are never created and APIM rejects the policy with a confusing
+      # 400 ("... could not be found"). Detect a fresh environment here and fail
+      # fast with clear remediation instead.
+      - name: Bootstrap guard - require "Publish all" on a fresh environment
+        if: ( inputs.COMMIT_ID != '' )
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME || vars.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME || vars.API_MANAGEMENT_SERVICE_NAME }}
+          ENVIRONMENT_NAME: ${{ inputs.API_MANAGEMENT_ENVIRONMENT }}
+          ARTIFACTS_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          # Only guard when the repo actually ships shared artifacts that policies depend on.
+          $fragmentsDir = Join-Path $env:ARTIFACTS_PATH "policy fragments"
+          $namedValuesDir = Join-Path $env:ARTIFACTS_PATH "named values"
+          $repoFragCount = if (Test-Path -LiteralPath $fragmentsDir) { @(Get-ChildItem -LiteralPath $fragmentsDir -Directory).Count } else { 0 }
+          $repoNvCount   = if (Test-Path -LiteralPath $namedValuesDir) { @(Get-ChildItem -LiteralPath $namedValuesDir -Directory).Count } else { 0 }
+          if ($repoFragCount -eq 0 -and $repoNvCount -eq 0) {
+            Write-Host "Repo has no shared policy fragments or named values; bootstrap guard not needed."
+            exit 0
+          }
+
+          Write-Host "Signing in to Azure to inspect the target APIM..."
+          az login --service-principal --username $env:AZURE_CLIENT_ID --password=$env:AZURE_CLIENT_SECRET --tenant $env:AZURE_TENANT_ID --output none
+          az account set --subscription $env:AZURE_SUBSCRIPTION_ID --output none
+
+          $base = "https://management.azure.com/subscriptions/$env:AZURE_SUBSCRIPTION_ID/resourceGroups/$env:AZURE_RESOURCE_GROUP_NAME/providers/Microsoft.ApiManagement/service/$env:API_MANAGEMENT_SERVICE_NAME"
+          [int]$apimFragCount = az rest --method get --url "$base/policyFragments?api-version=2024-05-01" --query "length(value)" --output tsv
+          [int]$apimNvCount   = az rest --method get --url "$base/namedValues?api-version=2024-05-01" --query "length(value)" --output tsv
+
+          Write-Host "Repo shared artifacts             -> fragments: $repoFragCount, named values: $repoNvCount"
+          Write-Host "Target APIM '$env:ENVIRONMENT_NAME' -> fragments: $apimFragCount, named values: $apimNvCount"
+
+          $needsBootstrap = ($repoFragCount -gt 0 -and $apimFragCount -eq 0) -or ($repoNvCount -gt 0 -and $apimNvCount -eq 0)
+          if ($needsBootstrap) {
+            Write-Host "############################################################"
+            Write-Host "FRESH ENVIRONMENT DETECTED: '$env:ENVIRONMENT_NAME'"
+            Write-Host "The target APIM is missing shared artifacts that API policies"
+            Write-Host "depend on (policy fragments / named values)."
+            Write-Host ""
+            Write-Host "Run the publisher ONCE in 'Publish all' mode to bootstrap it:"
+            Write-Host "  GitHub -> Actions -> Run publisher -> Run workflow"
+            Write-Host "  -> COMMIT_ID_CHOICE = publish-all-artifacts-in-repo"
+            Write-Host ""
+            Write-Host "After that, normal 'Publish changes' runs will succeed."
+            Write-Host "############################################################"
+            throw "Bootstrap required for environment '$env:ENVIRONMENT_NAME'. Run the publisher once in 'Publish all' mode."
+          }
+
+          Write-Host "Environment already bootstrapped. Continuing."
+
       # Run Spectral
       - uses: actions/setup-node@v5
         with:

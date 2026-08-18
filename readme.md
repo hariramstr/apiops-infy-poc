@@ -292,6 +292,13 @@ Do these once before the pipeline can publish:
    [docs/provision-azure.md](docs/provision-azure.md).
 2. **Configure GitHub environments** (secrets, variables, prod protection) —
    [docs/environment-setup.md](docs/environment-setup.md).
+3. **Bootstrap each new APIM once** by running the publisher in **Publish all**
+   mode (Actions → Run publisher → Run workflow → `COMMIT_ID_CHOICE =
+   publish-all-artifacts-in-repo`). This creates the shared artifacts (policy
+   fragments, named values, backends, tags) that API policies depend on. The
+   pipeline enforces this automatically: a **bootstrap guard** blocks
+   "Publish changes" runs against an un-bootstrapped environment and tells you
+   to run Publish all first.
 
 ## Handy links
 - Reference example to copy: [apimartifacts/apis/swagger-petstore/](apimartifacts/apis/swagger-petstore)
