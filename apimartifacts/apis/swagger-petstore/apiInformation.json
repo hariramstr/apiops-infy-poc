@@ -1,6 +1,7 @@
 {
   "properties": {
     "apiRevision": "1",
+    "authenticationSettings": {},
     "description": "Sample Swagger Petstore API published through APIOps.",
     "displayName": "Swagger Petstore Sample",
     "path": "swagger-petstore",
