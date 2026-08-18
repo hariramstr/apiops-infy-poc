@@ -23,7 +23,7 @@ env:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: ${{ inputs.API_MANAGEMENT_ENVIRONMENT }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it

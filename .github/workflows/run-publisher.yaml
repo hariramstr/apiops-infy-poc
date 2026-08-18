@@ -19,7 +19,7 @@ on:
 
 jobs:
   get-commit:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       # Set the COMMIT_ID env variable
       - name: Set the Commit Id
