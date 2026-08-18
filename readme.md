@@ -1,237 +1,366 @@
-# API Platform (APIOps)
+# API Platform – APIOps
 
-This repository is the **single source of truth** for the APIs we publish to
-Azure API Management (APIM). You describe each API as plain files here, open a
-pull request, and when it merges to `main` a GitHub Actions pipeline publishes
-the changes to **dev** and then **prod** automatically. There are **no manual
-Azure portal steps** for day-to-day work.
+This repository is the source of truth for the APIs we publish to **Azure API
+Management (APIM)**. Every API — its definition, policies, backends, and
+supporting configuration — is stored here as plain files (called *artifacts*)
+and managed with **APIOps**: the practice of treating APIM configuration as
+code and deploying it through Git and CI/CD.
 
-> New here? Read [Quick start](#quick-start), then [Add a new API](#add-a-new-api).
-> Setting up Azure for the first time? See [First-time setup](#first-time-setup-admins).
+The flow is simple. You edit artifacts under `apimartifacts/`, validate them
+locally, and open a pull request. After review and merge to `main`, a GitHub
+Actions pipeline (the **publisher**) applies your changes to the **development**
+environment and then to **production**. Day-to-day work needs no manual changes
+in the Azure portal.
 
-## Table of contents
-- [How it works](#how-it-works)
-- [Quick start](#quick-start)
+**New here?** Read the [Overview](#overview) and [How It Works](#how-it-works),
+then follow the [Quick Start](#quick-start). Setting up Azure or GitHub for the
+first time is an administrator task — see [Administrator Setup](#administrator-setup).
+
+| | |
+|---|---|
+| **Source of truth** | This repository — the files under `apimartifacts/` |
+| **Deployment mechanism** | GitHub Actions running the Azure APIOps publisher (v7.0.4) |
+| **Environments** | `dev` (development) and `prod` (production) |
+| **Primary artifact location** | `apimartifacts/` |
+| **Main branch behavior** | Every push to `main` publishes to dev, then prod |
+
+## Table of Contents
+
+- [Overview](#overview)
+- [How It Works](#how-it-works)
+- [Repository Structure](#repository-structure)
+- [APIOps Artifact Model](#apiops-artifact-model)
 - [Prerequisites](#prerequisites)
-- [Repository structure](#repository-structure)
-- [Add a new API](#add-a-new-api)
-- [Configure an API](#configure-an-api)
-- [How promotion works (dev → prod)](#how-promotion-works-dev--prod)
-- [Validate before you push](#validate-before-you-push)
-- [Republish everything vs. only changes](#republish-everything-vs-only-changes)
-- [Who edits what](#who-edits-what)
+- [Quick Start](#quick-start)
+- [Adding a New API](#adding-a-new-api)
+- [Configuring an API](#configuring-an-api)
+- [Environment Configuration](#environment-configuration)
+- [Deployment and Promotion](#deployment-and-promotion)
+- [Extracting APIM Configuration](#extracting-apim-configuration)
+- [Local Validation](#local-validation)
+- [Pull Request and Review Process](#pull-request-and-review-process)
+- [Ownership and Responsibilities](#ownership-and-responsibilities)
+- [Security Guidelines](#security-guidelines)
 - [Troubleshooting](#troubleshooting)
+- [Administrator Setup](#administrator-setup)
+- [Common Tasks](#common-tasks)
 - [Glossary](#glossary)
-- [First-time setup (admins)](#first-time-setup-admins)
-- [Handy links](#handy-links)
+- [Additional Documentation](#additional-documentation)
 
-## How it works
+## Overview
 
-Two pipelines drive everything:
+Managing APIM by hand in the Azure portal does not scale. Changes are hard to
+review, easy to forget, and drift between environments over time. This
+repository solves that by keeping every APIM setting in version control, where
+changes are reviewed, traceable, and promoted the same way through every
+environment.
 
-- **Publisher** ([.github/workflows/run-publisher.yaml](.github/workflows/run-publisher.yaml)) —
-  runs on every push to `main`. It reads the files under `apimartifacts/` and
-  applies them to APIM: first **dev**, then **prod**.
-- **Extractor** ([.github/workflows/run-extractor.yaml](.github/workflows/run-extractor.yaml)) —
-  run manually. It reads an existing APIM instance and writes the files back
-  into this repo (useful to import changes someone made in the portal).
+In this repository, **APIOps** means:
+
+- APIM configuration is expressed as files (artifacts) under `apimartifacts/`.
+- Changes go through pull requests and code review.
+- The **publisher** applies artifacts to APIM; the **extractor** reads an
+  existing APIM instance back into artifacts.
+
+**What is managed here:** APIs and their OpenAPI specifications, API-level and
+operation-level policies, backends, named values, policy fragments, tags, and
+per-environment overrides.
+
+**What you should not change manually in the Azure portal:** anything that is
+represented as an artifact in this repository. Manual portal edits are not
+tracked and will drift from — or be overwritten by — the next publish. If a
+change was already made in the portal, use the extractor to bring it back into
+source control rather than editing both places.
+
+**Responsibilities** are defined in
+[.github/CODEOWNERS](.github/CODEOWNERS). `CODEOWNERS` sets who is auto-requested
+to review each path; it does not block merges on its own. Making those reviews
+mandatory before merge is done with GitHub branch protection or repository
+rulesets (see [Pull Request and Review Process](#pull-request-and-review-process)).
+
+- **Application teams** own their own API folder: `apimartifacts/apis/<api>/`
+  (specification, API information, and operation policies).
+- **Platform team** owns shared and higher-risk areas: `backends/`,
+  `named values/`, `policy fragments/`, `tags/`, `configuration.prod.yaml`,
+  the pipelines under `.github/`, and `tools/`.
+
+## How It Works
+
+The end-to-end lifecycle:
+
+1. A developer creates or updates API artifacts under `apimartifacts/`.
+2. The developer validates the changes locally with the
+   **APIOps: Validate artifacts** task (or the underlying script).
+3. The developer creates a feature branch and opens a pull request.
+4. `CODEOWNERS` automatically requests the right reviewers, who approve.
+5. The pull request is merged into `main`.
+6. The push to `main` triggers the **publisher**, which applies the changed
+   artifacts to **dev**.
+7. After the dev job succeeds, the publisher applies the same changes to
+   **prod**. The prod job runs in the `prod` GitHub environment, so any
+   protection rules configured there (for example required reviewers) apply
+   before it proceeds.
+8. When configuration was changed directly in APIM, the **extractor** is run
+   manually to pull that configuration back into the repository as a pull
+   request.
 
 ```mermaid
-flowchart LR
-  A[Edit your API files] --> B[Open pull request]
-  B --> R[Reviewers approve]
-  R --> C[Merge to main]
-  C --> D[Publisher: deploy to Dev]
-  D --> E[Publisher: deploy to Prod]
+flowchart TD
+    A[Edit artifacts under apimartifacts/] --> B[Validate locally]
+    B --> C[Create feature branch and pull request]
+    C --> D[CODEOWNERS review and approval]
+    D --> E[Merge to main]
+    E --> F[Publisher runs on push to main]
+    F --> G[Publish changes to dev]
+    G --> H[Publish changes to prod]
+    H --> I[prod GitHub environment protection rules apply]
+
+    subgraph Manual operation
+        X[Run extractor workflow manually] --> Y[Opens a PR with config pulled from APIM]
+    end
 ```
 
-Under the hood the pipeline downloads the official
-[Azure/APIOps](https://github.com/Azure/apiops) `publisher`/`extractor`
-binaries and runs them against your APIM using a service principal stored in
-GitHub environment secrets.
+Under the hood, the workflows download the official
+[Azure/APIOps](https://github.com/Azure/apiops) publisher and extractor
+binaries (pinned to `v7.0.4`) and run them against APIM using a service
+principal stored in GitHub environment secrets. On a push, the publisher runs
+against the pushed commit, so it processes the artifacts changed in that commit;
+a manual run can instead republish everything (see
+[Deployment and Promotion](#deployment-and-promotion)).
 
-## Quick start
-
-```text
-1. Open this repo in VS Code.
-2. Terminal → Run Task… → "APIOps: Add new API" → answer the prompts.
-3. Paste your OpenAPI/Swagger into apimartifacts/apis/<your-api>/specification.json
-4. Terminal → Run Task… → "APIOps: Validate artifacts"
-5. Commit on a branch, open a pull request, get it approved, and merge.
-```
-
-Merging to `main` deploys automatically. That's it.
-
-## Prerequisites
-
-| Tool | Why | Install |
-|---|---|---|
-| **VS Code** | Runs the built-in tasks. | <https://code.visualstudio.com> |
-| **PowerShell 7 (`pwsh`)** | Runs the helper scripts/tasks. | <https://aka.ms/powershell> |
-| **Git** | Clone and push. | <https://git-scm.com> |
-| **Azure CLI** (admins only) | First-time Azure provisioning. | <https://aka.ms/azcli> |
-
-> App teams only need VS Code, PowerShell 7, and Git. Azure CLI is for admins
-> doing [first-time setup](#first-time-setup-admins).
-
-## Repository structure
+## Repository Structure
 
 This is the full layout. Every folder is explained in the tables below.
 
 ```text
 apiops-infy-poc/
-├─ apimartifacts/                       # SOURCE OF TRUTH — everything published to APIM
-│  ├─ apis/                             # One folder per API
-│  │  └─ swagger-petstore/             # Reference example — copy this pattern
-│  │     ├─ apiInformation.json        # API name, URL path, backend service URL
-│  │     ├─ specification.json         # The OpenAPI/Swagger definition
-│  │     ├─ policy.xml                 # API-wide rules (inbound/backend/outbound)
-│  │     └─ operations/                # One folder per endpoint (name = operationId)
-│  │        ├─ listPets/policy.xml     # Rules for just this endpoint
-│  │        ├─ createPet/policy.xml
-│  │        ├─ getPetById/policy.xml
-│  │        └─ deletePet/policy.xml
-│  ├─ backends/                         # Named targets an API forwards requests to
-│  │  └─ petstore-backend/
-│  │     └─ backendInformation.json    # Backend name + absolute URL
-│  ├─ named values/                     # Reusable settings referenced in policies as {{name}}
-│  │  ├─ petstore-backend-url/
-│  │  │  └─ namedValueInformation.json
-│  │  └─ platform-owner-team/
-│  │     └─ namedValueInformation.json
-│  ├─ policy fragments/                 # Reusable policy snippets shared by many APIs
-│  │  └─ correlation-id/
-│  │     ├─ policy.xml                 # The snippet body
-│  │     └─ policyFragmentInformation.json  # Fragment name/description
-│  └─ tags/                             # Labels to group & govern APIs
-│     ├─ public/
-│     │  ├─ tagInformation.json        # The tag itself
-│     │  └─ apis/swagger-petstore/
-│     │     └─ tagApiInformation.json  # Attaches this tag to that API
-│     └─ partner/
-│        ├─ tagInformation.json
-│        └─ apis/swagger-petstore/
-│           └─ tagApiInformation.json
-├─ .github/                             # GitHub automation
-│  ├─ workflows/                        # The CI/CD pipelines (GitHub Actions)
-│  │  ├─ run-publisher.yaml            # Entry pipeline: push → publish to dev then prod
-│  │  ├─ run-publisher-with-env.yaml   # Reusable job that runs the APIOps publisher
-│  │  └─ run-extractor.yaml            # Pulls existing APIM config back into the repo
-│  ├─ CODEOWNERS                        # Who must review changes to which folders
-│  └─ pull_request_template.md          # Checklist shown on every PR
-├─ docs/                                # Admin/setup guides (one-time setup)
-│  ├─ provision-azure.md               # Create the Azure resources
-│  └─ environment-setup.md             # Configure GitHub secrets/variables/environments
-├─ tools/                               # Local helper tooling
-│  └─ scripts/
-│     ├─ New-ApiScaffold.ps1           # Generates a ready-to-edit API folder
-│     └─ Validate-Artifacts.ps1        # Checks your files before you push
+├─ apimartifacts/                     # Source of truth — everything published to APIM
+│  ├─ apis/                           # One folder per API
+│  │  └─ swagger-petstore/            # Reference example — copy this pattern
+│  │     ├─ apiInformation.json       # API name, URL path, service URL
+│  │     ├─ specification.json        # OpenAPI/Swagger definition
+│  │     ├─ policy.xml                # API-level policy
+│  │     └─ operations/               # One folder per operation (name = operationId)
+│  │        └─ getPetById/policy.xml  # Operation-level policy
+│  ├─ backends/                       # Named backend targets (absolute URLs)
+│  ├─ named values/                   # Reusable/secret settings used in policies
+│  ├─ policy fragments/               # Reusable policy snippets
+│  └─ tags/                           # Labels that group and govern APIs
+├─ .github/
+│  ├─ workflows/                      # CI/CD pipelines (publisher, extractor)
+│  ├─ CODEOWNERS                      # Review ownership per folder
+│  └─ pull_request_template.md        # PR checklist
+├─ docs/                              # One-time administrator setup guides
+├─ tools/
+│  └─ scripts/                        # Local scaffold + validation scripts
 ├─ .vscode/
-│  └─ tasks.json                        # VS Code menu shortcuts for the scripts above
-├─ configuration.prod.yaml              # Prod overrides (values that differ in production)
-├─ configuration.extractor.yaml         # Settings for the extractor pipeline
-├─ .gitignore
-└─ readme.md                            # This file
+│  └─ tasks.json                      # VS Code task shortcuts for the scripts
+├─ configuration.prod.yaml            # Production overrides
+├─ configuration.extractor.yaml       # Extractor input configuration
+└─ readme.md
 ```
 
-### Top-level folders
+- **`apimartifacts/`** — the source of truth. Every file here describes part of
+  APIM and is what the publisher applies. Application teams work under
+  `apimartifacts/apis/<api>/`; the platform team owns the shared folders.
+- **`.github/workflows/`** — the CI/CD pipelines: `run-publisher.yaml` (entry
+  point on push), `run-publisher-with-env.yaml` (reusable job that runs the
+  publisher for one environment), and `run-extractor.yaml` (manual extractor).
+- **`docs/`** — one-time administrator setup guides for provisioning Azure and
+  configuring GitHub environments. Application teams rarely touch these.
+- **`tools/`** — local helper scripts to scaffold a new API and to validate
+  artifacts before opening a pull request.
+- **`.vscode/`** — editor convenience. `tasks.json` exposes the scripts as
+  Run Task menu entries.
+- **Environment configuration files** — `configuration.prod.yaml` holds
+  production overrides applied by the publisher for prod;
+  `configuration.extractor.yaml` lists what the extractor should pull when run
+  in filtered mode.
 
-| Folder | Purpose |
-|---|---|
-| `apimartifacts/` | **The source of truth.** Every file here describes part of your APIM and is what the pipeline publishes. This is where API teams work. |
-| `.github/` | GitHub automation — the pipelines that publish your changes, plus review rules (`CODEOWNERS`) and the PR checklist. |
-| `docs/` | One-time **admin** setup guides (create Azure resources, wire up GitHub). You rarely touch these after setup. |
-| `tools/` | Helper scripts you run locally to scaffold a new API and to validate your files before pushing. |
-| `.vscode/` | Editor convenience — Run Task menu entries that call the scripts in `tools/`. |
+## APIOps Artifact Model
 
-### Inside `apimartifacts/` (the folders you edit)
+All artifacts live under `apimartifacts/`. The publisher creates or updates the
+matching APIM resources from these files.
 
-| Folder | What it holds | Nested folders |
+| Artifact | What it represents | Where it is stored | Normally maintained by |
+|---|---|---|---|
+| API | A published API in APIM | `apis/<api>/` | Application team |
+| API information | The API's core settings (display name, path, `serviceUrl`, protocols) | `apis/<api>/apiInformation.json` | Application team |
+| OpenAPI specification | The API contract (operations, schemas) | `apis/<api>/specification.json` or `.yaml` | Application team |
+| API-level policy | Rules applied to the whole API | `apis/<api>/policy.xml` | Application team |
+| Operation-level policy | Rules for a single operation | `apis/<api>/operations/<operationId>/policy.xml` | Application team |
+| Backend | A named destination requests are forwarded to | `backends/<backend>/backendInformation.json` | Platform team |
+| Named value | A reusable/secret setting referenced in policies as `{{name}}` | `named values/<name>/namedValueInformation.json` | Platform team |
+| Policy fragment | A reusable policy snippet shared across APIs | `policy fragments/<fragment>/` | Platform team |
+| Tag | A label used to group and govern APIs | `tags/<tag>/` | Platform team |
+
+Key rules and relationships:
+
+- **Operation folder names must match OpenAPI `operationId` values.** If the
+  specification defines `"operationId": "getOrder"`, the policy folder must be
+  `operations/getOrder/`. This is required by the APIOps structure and is part
+  of the pull request checklist.
+- **A tag is applied to an API** by adding
+  `tags/<tag>/apis/<api>/tagApiInformation.json` (an empty `{}` file is enough).
+- **A policy references a named value or fragment by name**, so the referenced
+  artifact must exist in the target APIM before the policy that uses it.
+
+Four related concepts are easy to confuse — keep them distinct:
+
+- **Backend resource** (`backends/<name>/…`) — a named routing target. Its
+  `url` must be a **literal absolute URL**; APIM does not resolve `{{token}}`
+  values in a backend `url`. A policy selects it with
+  `<set-backend-service backend-id="<name>" />`.
+- **API `serviceUrl`** (`apiInformation.json`) — the default backend address
+  for the API when no backend is selected in policy.
+- **Named value** — a value referenced inside policies as `{{name}}`. Named
+  values can be overridden per environment.
+- **Environment-specific override** (`configuration.prod.yaml`) — where values
+  that differ in production (such as a backend `url` or an API `serviceUrl`)
+  are set, instead of hard-coding them in the artifacts.
+
+## Prerequisites
+
+Application teams need Git, Visual Studio Code, and PowerShell 7. Azure CLI is
+only required for administrators performing first-time setup.
+
+| Tool | Who needs it | Purpose | Verify | Install |
+|---|---|---|---|---|
+| Git | Everyone | Clone the repository and push branches | `git --version` | <https://git-scm.com> |
+| Visual Studio Code | Everyone | Edit artifacts and run the built-in tasks | `code --version` | <https://code.visualstudio.com> |
+| PowerShell 7 (`pwsh`) | Everyone | Run the scaffold and validation scripts | `pwsh --version` | <https://aka.ms/powershell> |
+| Azure CLI | Administrators | Provision Azure resources during setup | `az --version` | <https://aka.ms/azcli> |
+
+## Quick Start
+
+This is the fastest path from an empty checkout to an open pull request. It uses
+a generic example API named `orders-api`; substitute your own values.
+
+1. Clone the repository.
+
+   ```bash
+   git clone <repository-url>
+   cd apiops-infy-poc
+   ```
+
+2. Create a feature branch.
+
+   ```bash
+   git checkout -b feature/orders-api
+   ```
+
+3. Open the repository in VS Code.
+
+   ```bash
+   code .
+   ```
+
+4. Scaffold the API skeleton. Run the VS Code task
+   **Terminal → Run Task… → `APIOps: Add new API`** (it prompts for the API name
+   and dev backend URL), or run the script directly:
+
+   ```powershell
+   pwsh -File tools/scripts/New-ApiScaffold.ps1 `
+     -ApiName orders-api `
+     -DisplayName "Orders API" `
+     -Path orders `
+     -BackendUrl https://orders-api.dev.example.com `
+     -Operations getOrder,createOrder `
+     -Tags partner
+   ```
+
+5. Add the OpenAPI specification at
+   `apimartifacts/apis/orders-api/specification.json` (or `.yaml`). The scaffold
+   does not create it.
+
+6. Adjust the generated policies, backend, named value, and tags as needed.
+
+7. Validate locally. Run the VS Code task **`APIOps: Validate artifacts`**, or:
+
+   ```powershell
+   pwsh -File tools/scripts/Validate-Artifacts.ps1
+   ```
+
+8. Review the changes.
+
+   ```bash
+   git status
+   git diff
+   ```
+
+9. Commit and push.
+
+   ```bash
+   git add .
+   git commit -m "Add orders-api"
+   git push -u origin feature/orders-api
+   ```
+
+10. Open a pull request against `main`. After review and merge, the publisher
+    deploys to dev and then prod.
+
+## Adding a New API
+
+Use the scaffold script (directly or via the `APIOps: Add new API` task) to
+generate a standards-compliant skeleton.
+
+Parameters of `tools/scripts/New-ApiScaffold.ps1`:
+
+| Parameter | Required | Purpose |
 |---|---|---|
-| `apis/` | One sub-folder per API. | `<api>/operations/<operationId>/` — per-endpoint policies. Folder name must match the `operationId` in the spec. |
-| `backends/` | Named targets an API routes to (one sub-folder per backend). | `<backend>/` holds `backendInformation.json` (name + absolute URL). |
-| `named values/` | Reusable/secret settings referenced in policies as `{{name}}`; overridable per environment. | `<name>/` holds `namedValueInformation.json`. |
-| `policy fragments/` | Reusable policy snippets many APIs can `include-fragment`. | `<fragment>/` holds the snippet `policy.xml` + its info file. |
-| `tags/` | Labels to group and govern APIs. | `<tag>/apis/<api>/` attaches that tag to an API. |
+| `-ApiName` | Yes (prompted if omitted) | URL-safe API name; used as the folder and APIM name |
+| `-DisplayName` | No | Human-friendly name; defaults to `-ApiName` |
+| `-Path` | No | API URL suffix in APIM; defaults to `-ApiName` |
+| `-BackendUrl` | Yes (prompted if omitted) | Dev backend URL; stored in the backend and its named value |
+| `-Operations` | No | Comma-separated `operationId`s to scaffold operation policies for |
+| `-Tags` | No | Comma-separated tag names to create and link |
+| `-ArtifactsRoot` | No | Artifacts root folder; defaults to `apimartifacts` |
 
-### Per-API files (inside `apimartifacts/apis/<name>/`)
-
-| File / folder | In plain words |
-|---|---|
-| `apiInformation.json` | The API's basic details (display name, URL path, backend service URL). |
-| `specification.json` | Your API definition (the Swagger/OpenAPI document). |
-| `policy.xml` | Rules applied to the whole API (headers, routing, auth). |
-| `operations/<op>/policy.xml` | Rules for one endpoint only (e.g. caching, rate limits). |
-
-### Root configuration files
-
-| File | In plain words |
-|---|---|
-| `configuration.prod.yaml` | Production overrides — values that differ in prod (e.g. the prod APIM name, a prod backend URL). |
-| `configuration.extractor.yaml` | Settings used by the extractor pipeline when pulling APIM config back into the repo. |
-
-## Add a new API
-
-### Option A — use the task (recommended)
-1. In VS Code: **Terminal → Run Task… → "APIOps: Add new API"**.
-2. Answer the prompts (API name, dev backend URL, etc.).
-3. Paste your OpenAPI/Swagger into the generated
-   `apimartifacts/apis/<your-api>/specification.json`.
-4. Run **"APIOps: Validate artifacts"**, then open a pull request.
-
-### Option B — run the script directly
-```powershell
-pwsh -File tools/scripts/New-ApiScaffold.ps1 `
-  -ApiName isclaims `
-  -DisplayName "IS Claims" `
-  -Path isclaims `
-  -BackendUrl https://claims.dev.internal `
-  -Operations getClaim,createClaim `
-  -Tags partner
-```
-
-This generates a ready-to-edit skeleton:
+Files generated for
+`-ApiName orders-api -Operations getOrder,createOrder -Tags partner`:
 
 ```text
-apimartifacts/apis/isclaims/apiInformation.json
-apimartifacts/apis/isclaims/policy.xml
-apimartifacts/apis/isclaims/operations/getClaim/policy.xml
-apimartifacts/apis/isclaims/operations/createClaim/policy.xml
-apimartifacts/backends/isclaims-backend/backendInformation.json
-apimartifacts/named values/isclaims-backend-url/namedValueInformation.json
-apimartifacts/tags/partner/apis/isclaims/tagApiInformation.json
+apimartifacts/apis/orders-api/apiInformation.json
+apimartifacts/apis/orders-api/policy.xml
+apimartifacts/apis/orders-api/operations/getOrder/policy.xml
+apimartifacts/apis/orders-api/operations/createOrder/policy.xml
+apimartifacts/backends/orders-api-backend/backendInformation.json
+apimartifacts/named values/orders-api-backend-url/namedValueInformation.json
+apimartifacts/tags/partner/tagInformation.json
+apimartifacts/tags/partner/apis/orders-api/tagApiInformation.json
 ```
 
-> **Operation folder names must match the `operationId`s in your spec.** If your
-> OpenAPI has `"operationId": "getClaim"`, the folder must be
-> `operations/getClaim/`.
+The script skips files that already exist, so it is safe to re-run. It does not
+generate `specification.json` — add that yourself. The repository also includes a
+complete sample API under `apimartifacts/apis/swagger-petstore/` you can copy.
 
-## Configure an API
+## Configuring an API
 
-These are the pieces most APIs need. Copy the reference example under
-`apimartifacts/apis/swagger-petstore/` for a working template.
+A working set for the `orders-api` example.
 
-### API basics — `apiInformation.json`
+API information — `apimartifacts/apis/orders-api/apiInformation.json`:
+
 ```json
 {
   "properties": {
     "apiRevision": "1",
-    "displayName": "IS Claims",
-    "path": "isclaims",
+    "displayName": "Orders API",
+    "path": "orders",
     "protocols": [ "https" ],
-    "serviceUrl": "https://claims.dev.internal",
+    "serviceUrl": "https://orders-api.dev.example.com",
     "subscriptionRequired": true
   }
 }
 ```
 
-### Inbound / outbound / backend rules — `policy.xml`
+API-level policy — `apimartifacts/apis/orders-api/policy.xml`:
+
 ```xml
 <policies>
   <inbound>
     <base />
     <include-fragment fragment-id="correlation-id" />
-    <set-backend-service backend-id="isclaims-backend" />
+    <set-backend-service backend-id="orders-api-backend" />
   </inbound>
   <backend>
     <forward-request />
@@ -248,123 +377,271 @@ These are the pieces most APIs need. Copy the reference example under
 </policies>
 ```
 
-### Backend URL — `backends/<name>/backendInformation.json`
-Use a **literal absolute URL**. APIM does **not** resolve `{{tokens}}` in a
-backend's `url`. Per-environment differences are handled by an override (below).
+Backend — `apimartifacts/backends/orders-api-backend/backendInformation.json`.
+Use a literal absolute URL; APIM does not resolve `{{token}}` values in a backend
+`url`. Per-environment differences are handled by an override, not a token:
+
 ```json
 {
   "properties": {
-    "description": "IS Claims backend.",
+    "description": "Orders API backend.",
     "protocol": "http",
-    "url": "https://claims.dev.internal"
+    "url": "https://orders-api.dev.example.com"
   }
 }
 ```
 
-### Per-environment overrides — `configuration.prod.yaml`
-Override the backend URL (and the API `serviceUrl`) for production:
+Keep these four concepts distinct:
+
+- **Backend resource** — a named routing target selected with
+  `<set-backend-service backend-id="orders-api-backend" />`. Its `url` must be a
+  literal absolute URL.
+- **API `serviceUrl`** — the default backend address used when no backend is
+  selected in policy.
+- **Named value** — a value referenced inside policies as `{{name}}`; it can be
+  overridden per environment.
+- **Environment override** — the place to set values that differ per environment
+  (see [Environment Configuration](#environment-configuration)).
+
+## Environment Configuration
+
+Two kinds of configuration control how a deployment behaves.
+
+Per-environment artifact overrides live in `configuration.prod.yaml`. The
+publisher applies these on top of the artifacts when deploying to prod. Match
+resources by `name` and override only the properties that differ:
+
 ```yaml
-backends:
-  - name: isclaims-backend
+apimServiceName: <prod-apim-name>
+
+namedValues:
+  - name: orders-api-backend-url
     properties:
-      url: https://claims.prod.internal
+      value: https://orders-api.prod.example.com
+
+backends:
+  - name: orders-api-backend
+    properties:
+      url: https://orders-api.prod.example.com
 
 apis:
-  - name: isclaims
+  - name: orders-api
     properties:
-      serviceUrl: https://claims.prod.internal
+      serviceUrl: https://orders-api.prod.example.com
 ```
 
-> **Named values** (`named values/<name>/…`) are still useful for values you
-> reference **inside policies** as `{{name}}` — they just can't be used as a
-> backend `url`.
+GitHub environment configuration provides the Azure credentials and target APIM
+for each environment (`dev` and `prod`). The workflows authenticate with an Azure
+**service principal** (client ID and client secret), read from GitHub environment
+secrets and variables:
 
-### Tags — `tags/<tag>/…`
-```text
-tags/partner/tagInformation.json                     # { "properties": { "displayName": "partner" } }
-tags/partner/apis/isclaims/tagApiInformation.json    # {}
+| Name | Stored as | Purpose |
+|---|---|---|
+| `AZURE_CLIENT_SECRET` | Secret | Service principal client secret |
+| `AZURE_CLIENT_ID` | Secret or variable | Service principal application (client) ID |
+| `AZURE_TENANT_ID` | Secret or variable | Microsoft Entra tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Secret or variable | Target Azure subscription ID |
+| `AZURE_RESOURCE_GROUP_NAME` | Secret or variable | Resource group containing the APIM instance |
+| `API_MANAGEMENT_SERVICE_NAME` | Secret or variable | Target APIM instance name |
+| `LOG_LEVEL` | Variable (optional) | Publisher log level; defaults to `Information` |
+
+`AZURE_CLIENT_SECRET` must be an environment **secret**. Full setup steps are in
+[docs/environment-setup.md](docs/environment-setup.md).
+
+## Deployment and Promotion
+
+The publisher pipeline is defined in
+[.github/workflows/run-publisher.yaml](.github/workflows/run-publisher.yaml)
+(named **Run - Publisher**). It calls the reusable workflow
+`run-publisher-with-env.yaml` to run the Azure APIOps publisher (version
+`v7.0.4`) for one environment.
+
+Triggers:
+
+- **Push to `main`** — publishes automatically.
+- **Manual run** (Actions → Run workflow) — with a `COMMIT_ID_CHOICE` input.
+
+Flow on push to `main`:
+
+1. Publish to **dev** (processes the artifacts changed in the pushed commit).
+2. After dev succeeds, publish to **prod**.
+
+The prod job runs in the `prod` GitHub environment. Any protection rules
+configured on that environment (for example required reviewers) apply before it
+proceeds. These rules are configured in GitHub, not defined in the workflow.
+
+Publishing modes (chosen by the manual `COMMIT_ID_CHOICE` input; a push always
+uses change mode):
+
+| Mode | Input value | Behavior |
+|---|---|---|
+| Change publish | `publish-artifacts-in-last-commit` | Publishes the artifacts changed in the commit |
+| Full publish | `publish-all-artifacts-in-repo` | Republishes every artifact in the repository |
+
+Initial environment bootstrap: before a change publish, the reusable publisher
+workflow checks whether the target APIM already contains the shared artifacts
+that policies depend on (policy fragments and named values). If the environment
+has none, it performs a one-time full publish to create them first, then
+continues with the change publish. This lets a brand-new environment succeed on
+its first run without a separate manual step.
+
+Before each publish, the workflow also runs a Spectral lint over the API
+specifications (`apimartifacts/apis/**/specification.{json,yml,yaml}`) using a
+public ruleset. Lint warnings are reported but do not fail the run; lint errors
+do.
+
+```mermaid
+flowchart TD
+    A[Push to main] --> B[Publish to dev]
+    B --> C{dev succeeded?}
+    C -->|yes| D[Publish to prod]
+    C -->|no| E[Stop]
+    D --> F[prod environment protection rules apply]
 ```
 
-## How promotion works (dev → prod)
+## Extracting APIM Configuration
 
-- Every merge to `main` publishes to **dev** first.
-- If dev succeeds, the same commit publishes to **prod**.
-- **Prod** can require approval — see
-  [Protect production](docs/environment-setup.md#3-protect-production-recommended).
-- Environment-specific differences (like URLs) live in
-  `configuration.prod.yaml`, not in the API files themselves.
+When configuration is changed directly in APIM, use the extractor to bring it
+back into source control instead of editing files by hand. It is defined in
+[.github/workflows/run-extractor.yaml](.github/workflows/run-extractor.yaml)
+(named **Run - Extractor**).
 
-## Validate before you push
+- It runs **manually only** (Actions → Run - Extractor → Run workflow).
+- It runs against the **`dev`** environment.
+- Inputs:
+  - Scope — `Extract All APIs`, or only what is listed in
+    `configuration.extractor.yaml`.
+  - Specification format — one of `OpenAPIV3Yaml`, `OpenAPIV3Json`,
+    `OpenAPIV2Yaml`, or `OpenAPIV2Json`.
+- It writes the extracted artifacts and then **opens a pull request** with the
+  changes (labelled `extract`, `automated pr`) for review.
 
-Run the **"APIOps: Validate artifacts"** task, or:
+## Local Validation
+
+Run the **`APIOps: Validate artifacts`** VS Code task, or the script directly:
+
 ```powershell
 pwsh -File tools/scripts/Validate-Artifacts.ps1
 ```
-It checks that every JSON/XML file is valid and that each API has both an
-`apiInformation.json` and a `specification.*`. Fix anything it reports before
-opening a pull request.
 
-## Republish everything vs. only changes
+The validator:
 
-The publisher can run in two modes (choose when you trigger it manually from the
-Actions tab):
+- parses every `.json` and `.xml` file under `apimartifacts/`, and
+- confirms each API folder has both an `apiInformation.json` and a
+  `specification.*` file.
 
-| Mode | When to use |
+It exits with a non-zero code on failure, so it can also run in CI. Fix anything
+it reports before opening a pull request.
+
+## Pull Request and Review Process
+
+1. Push your feature branch and open a pull request against `main`.
+2. The pull request template
+   ([.github/pull_request_template.md](.github/pull_request_template.md)) adds a
+   checklist:
+   - changes limited to your own API folder (unless you are on the platform team);
+   - the API has both `apiInformation.json` and `specification.*`;
+   - operation policy folders match the spec's `operationId`s;
+   - production URL differences are added to `configuration.prod.yaml`;
+   - `APIOps: Validate artifacts` passed.
+3. `CODEOWNERS` automatically requests reviewers for the paths you changed.
+4. After the required reviews are satisfied and the branch is merged to `main`,
+   the publisher deploys the change.
+
+`CODEOWNERS` only defines who reviews each path. Making those reviews mandatory
+before merge requires GitHub **branch protection** or a **repository ruleset** on
+`main`; configure that separately.
+
+## Ownership and Responsibilities
+
+Ownership is defined in [.github/CODEOWNERS](.github/CODEOWNERS):
+
+| Path | Owner |
 |---|---|
-| **Publish changes** (default) | Normal merges. Publishes only what changed in the last commit — fast. |
-| **Publish all** | Recovery only. Republishes every artifact (e.g. after a failed run or a rebuilt environment). |
+| Everything by default | `@platform-team` |
+| `apimartifacts/apis/` | `@api-teams` |
+| `apimartifacts/named values/` | `@platform-team` |
+| `apimartifacts/backends/` | `@platform-team` |
+| `apimartifacts/policy fragments/` | `@platform-team` |
+| `apimartifacts/tags/` | `@platform-team` |
+| `configuration.prod.yaml` | `@platform-team` |
+| `.github/` | `@platform-team` |
+| `tools/` | `@platform-team` |
 
-## Who edits what
+Replace the placeholder handles (`@platform-team`, `@api-teams`) with your real
+GitHub teams. `CODEOWNERS` requests reviews; it does not enforce them (see
+[Pull Request and Review Process](#pull-request-and-review-process)).
 
-- **API teams:** only your own folder `apimartifacts/apis/<your-api>/`.
-- **Platform/senior team:** shared folders (`named values`, `backends`,
-  `policy fragments`, `tags`), the pipelines in `.github/`, and
-  `configuration.prod.yaml`. This split is enforced by
-  [.github/CODEOWNERS](.github/CODEOWNERS).
+## Security Guidelines
+
+- Never commit secrets, credentials, connection strings, or subscription IDs.
+  Keep them in GitHub environment secrets and variables.
+- The service principal client secret is stored only as the
+  `AZURE_CLIENT_SECRET` environment secret. Rotate it periodically.
+- Scope the service principal to the least privilege it needs on the target
+  resource group and APIM instance.
+- For sensitive named values, set `"secret": true` in
+  `namedValueInformation.json` and avoid storing the plaintext in the repository.
+- Protect `main` and the `prod` environment with branch protection or repository
+  rulesets so changes are reviewed and production deployments are gated as your
+  organization requires.
+- Review every extractor pull request before merging.
 
 ## Troubleshooting
 
-| Symptom | Likely cause & fix |
+| Symptom | Likely cause and fix |
 |---|---|
-| Pipeline fails: *"Missing dev environment configuration: AZURE_CLIENT_SECRET"* | The secret was added as an **Environment variable** instead of an **Environment secret**. See [environment-setup.md](docs/environment-setup.md). |
-| Spectral step: *"No files found to lint"* | The API folder has no `specification.*` file, or the operation folder names don't match your `operationId`s. |
-| Publish fails: *"Cannot find a property '<name>'"* | The policy references a named value or policy fragment that isn't in the target APIM yet. The pipeline auto-bootstraps fresh environments; if you still hit this, the referenced artifact is missing from the repo — add it, or run the publisher once in **Publish all** mode. |
-| Operation policy not applied | The `operations/<op>/` folder name must equal the `operationId` in the spec. |
-| Prod job never runs | Prod is waiting for a required reviewer, or the `prod` environment's branch rule doesn't include `main`. |
+| Pipeline fails: `Missing dev environment configuration: AZURE_CLIENT_SECRET` | `AZURE_CLIENT_SECRET` was added as an environment variable instead of an environment secret. See [docs/environment-setup.md](docs/environment-setup.md). |
+| Spectral step reports `No files found to lint` | The API folder has no `specification.*` file, or operation folder names do not match the `operationId`s. |
+| Publish fails with a `ValidationError` about a missing property or fragment | A policy references a named value or policy fragment that is not yet in the target APIM. Add the artifact, or run a full publish to seed a new environment. |
+| An operation policy is not applied | The `operations/<op>/` folder name must equal the `operationId` in the specification. |
+| The prod job does not run | The `prod` environment is waiting for a required reviewer, or its branch rule does not include `main`. |
 | `pwsh: command not found` | Install [PowerShell 7](https://aka.ms/powershell). |
+
+## Administrator Setup
+
+Complete these once before the pipeline can publish:
+
+1. Provision the Azure resources (resource groups, APIM, service principal) —
+   [docs/provision-azure.md](docs/provision-azure.md).
+2. Configure the GitHub environments (secrets, variables, and prod protection) —
+   [docs/environment-setup.md](docs/environment-setup.md).
+
+Detailed steps live in those guides and are not repeated here.
+
+## Common Tasks
+
+| Task | How |
+|---|---|
+| Scaffold a new API | `APIOps: Add new API` task, or `pwsh -File tools/scripts/New-ApiScaffold.ps1` |
+| Validate artifacts | `APIOps: Validate artifacts` task, or `pwsh -File tools/scripts/Validate-Artifacts.ps1` |
+| Publish changes | Push to `main` (automatic) |
+| Republish everything | Actions → Run - Publisher → Run workflow → `publish-all-artifacts-in-repo` |
+| Pull portal changes into the repo | Actions → Run - Extractor → Run workflow |
+| Change a prod-only value | Edit `configuration.prod.yaml` |
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
-| **APIM** | Azure API Management — the gateway that hosts our APIs. |
-| **Artifact** | Any file under `apimartifacts/` that describes part of APIM. |
-| **Named value** | A reusable setting referenced in policies as `{{name}}`; can differ per environment. |
-| **Backend** | A named destination an API forwards requests to. |
-| **Policy** | Rules applied to requests/responses (headers, routing, rate limits). |
-| **Policy fragment** | A reusable snippet of policy shared across APIs. |
-| **Service principal** | The identity the pipeline uses to sign in to Azure. |
+| APIM | Azure API Management — the gateway that hosts the APIs. |
+| APIOps | Managing APIM configuration as code through Git and CI/CD. |
+| Artifact | Any file under `apimartifacts/` that describes part of APIM. |
+| Publisher | The tool and pipeline that apply artifacts to APIM. |
+| Extractor | The tool and pipeline that read APIM configuration back into artifacts. |
+| Named value | A reusable setting referenced in policies as `{{name}}`; can differ per environment. |
+| Backend | A named destination an API forwards requests to. |
+| Policy | Rules applied to requests and responses (headers, routing, rate limits). |
+| Policy fragment | A reusable snippet of policy shared across APIs. |
+| Service principal | The Azure identity the pipeline uses to sign in and publish. |
 
-## First-time setup (admins)
+## Additional Documentation
 
-Do these once before the pipeline can publish:
-
-1. **Create Azure resources** (resource groups, APIM, service principals) —
-   [docs/provision-azure.md](docs/provision-azure.md).
-2. **Configure GitHub environments** (secrets, variables, prod protection) —
-   [docs/environment-setup.md](docs/environment-setup.md).
-
-> **Fresh environments bootstrap themselves.** The first time you publish to a
-> brand-new APIM (dev, prod, or any new environment), the pipeline detects that
-> the shared artifacts (policy fragments, named values, backends, tags) are
-> missing and automatically runs a one-time **Publish all** to seed them before
-> the incremental publish. No manual step required — every environment behaves
-> the same way.
-
-## Handy links
-- Reference example to copy: [apimartifacts/apis/swagger-petstore/](apimartifacts/apis/swagger-petstore)
-- First-time Azure setup (admins): [docs/provision-azure.md](docs/provision-azure.md)
-- GitHub environment setup (admins): [docs/environment-setup.md](docs/environment-setup.md)
-- New-API tool: [tools/scripts/New-ApiScaffold.ps1](tools/scripts/New-ApiScaffold.ps1)
-- Pre-check tool: [tools/scripts/Validate-Artifacts.ps1](tools/scripts/Validate-Artifacts.ps1)
+- Provision Azure (administrators): [docs/provision-azure.md](docs/provision-azure.md)
+- GitHub environment setup (administrators): [docs/environment-setup.md](docs/environment-setup.md)
+- Code ownership: [.github/CODEOWNERS](.github/CODEOWNERS)
+- Pull request template: [.github/pull_request_template.md](.github/pull_request_template.md)
+- Sample API to copy: [apimartifacts/apis/swagger-petstore/](apimartifacts/apis/swagger-petstore)
+- Scaffold script: [tools/scripts/New-ApiScaffold.ps1](tools/scripts/New-ApiScaffold.ps1)
+- Validation script: [tools/scripts/Validate-Artifacts.ps1](tools/scripts/Validate-Artifacts.ps1)
 - Upstream project: [Azure/APIOps](https://github.com/Azure/apiops)
