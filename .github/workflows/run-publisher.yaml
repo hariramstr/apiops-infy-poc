@@ -29,7 +29,8 @@ jobs:
       commit_id: ${{ steps.commit.outputs.commit_id }}
   #Publish with Commit ID
   Push-Changes-To-APIM-Dev-With-Commit-ID:
-    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' || github.event.inputs.COMMIT_ID_CHOICE == '')
+    name: Dev / Publish changes
+    if: ${{ github.event_name == 'push' || inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' }}
     needs: get-commit
     uses: ./.github/workflows/run-publisher-with-env.yaml
     with:
@@ -40,7 +41,8 @@ jobs:
 
   #Publish without Commit ID. Publishes all artifacts that reside in the artifacts folder
   Push-Changes-To-APIM-Dev-Without-Commit-ID:
-    if: ( github.event.inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo' )
+    name: Dev / Publish all
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo' }}
     needs: get-commit
     uses: ./.github/workflows/run-publisher-with-env.yaml
     with:
@@ -49,7 +51,8 @@ jobs:
     secrets: inherit
 
   Push-Changes-To-APIM-Prod-With-Commit-ID:
-    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' || github.event.inputs.COMMIT_ID_CHOICE == '')
+    name: Prod / Publish changes
+    if: ${{ github.event_name == 'push' || inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' }}
     needs: [get-commit, Push-Changes-To-APIM-Dev-With-Commit-ID]
     uses: ./.github/workflows/run-publisher-with-env.yaml
     with:
@@ -60,7 +63,8 @@ jobs:
     secrets: inherit
 
   Push-Changes-To-APIM-Prod-Without-Commit-ID:
-    if: ( github.event.inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo' )
+    name: Prod / Publish all
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo' }}
     needs: [get-commit, Push-Changes-To-APIM-Dev-Without-Commit-ID]
     uses: ./.github/workflows/run-publisher-with-env.yaml
     with:
