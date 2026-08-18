@@ -1,0 +1,13 @@
+{
+  "properties": {
+    "apiRevision": "1",
+    "description": "Sample Swagger Petstore API published through APIOps.",
+    "displayName": "Swagger Petstore Sample",
+    "path": "swagger-petstore",
+    "protocols": [
+      "https"
+    ],
+    "serviceUrl": "https://petstore3.swagger.io/api/v3",
+    "subscriptionRequired": false
+  }
+}
