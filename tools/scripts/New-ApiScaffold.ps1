@@ -146,9 +146,9 @@ foreach ($op in $Operations) {
 New-File (Join-Path $ArtifactsRoot "backends/$backendName/backendInformation.json") (@"
 {
   "properties": {
-    "description": "$DisplayName backend. URL is environment-driven via the $backendUrlNamedValue named value.",
+    "description": "$DisplayName backend. Override the URL per environment in configuration.<env>.yaml.",
     "protocol": "http",
-    "url": "{{$backendUrlNamedValue}}"
+    "url": "$BackendUrl"
   }
 }
 "@)
@@ -178,4 +178,4 @@ foreach ($tag in $Tags) {
 }
 
 Write-Information "Scaffold complete for '$ApiName'. Add specification.json/.yaml next, then add the prod override in configuration.prod.yaml." -InformationAction Continue
-Write-Information "  namedValues:`n    - name: $backendUrlNamedValue`n      properties:`n        value: <prod-url>" -InformationAction Continue
+Write-Information "  backends:`n    - name: $backendName`n      properties:`n        url: <prod-absolute-url>" -InformationAction Continue

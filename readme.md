@@ -188,36 +188,35 @@ These are the pieces most APIs need. Copy the reference example under
 ```
 
 ### Backend URL — `backends/<name>/backendInformation.json`
-Route through a named value so the URL can change per environment:
+Use a **literal absolute URL**. APIM does **not** resolve `{{tokens}}` in a
+backend's `url`. Per-environment differences are handled by an override (below).
 ```json
 {
   "properties": {
     "description": "IS Claims backend.",
     "protocol": "http",
-    "url": "{{isclaims-backend-url}}"
+    "url": "https://claims.dev.internal"
   }
 }
 ```
 
-### Per-environment settings — `named values/<name>/namedValueInformation.json`
-```json
-{
-  "properties": {
-    "displayName": "isclaims-backend-url",
-    "secret": false,
-    "value": "https://claims.dev.internal"
-  }
-}
-```
-
-Then override just the value for production in
-[configuration.prod.yaml](configuration.prod.yaml):
+### Per-environment overrides — `configuration.prod.yaml`
+Override the backend URL (and the API `serviceUrl`) for production:
 ```yaml
-namedValues:
-  - name: isclaims-backend-url
+backends:
+  - name: isclaims-backend
     properties:
-      value: https://claims.prod.internal
+      url: https://claims.prod.internal
+
+apis:
+  - name: isclaims
+    properties:
+      serviceUrl: https://claims.prod.internal
 ```
+
+> **Named values** (`named values/<name>/…`) are still useful for values you
+> reference **inside policies** as `{{name}}` — they just can't be used as a
+> backend `url`.
 
 ### Tags — `tags/<tag>/…`
 ```text

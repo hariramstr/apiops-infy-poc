@@ -4,17 +4,19 @@
 # only the "properties" that differ per environment.
 apimServiceName: apim-apiops-prod-poc
 
-# Environment-driven backend routing. The backend URL and API service URL both
-# derive from this single named value, so promoting to prod changes it in one place.
+# Named values can be overridden per environment. Tokens like {{name}} resolve
+# inside policies (not in a backend url).
 namedValues:
   - name: petstore-backend-url
     properties:
       value: https://petstore3.swagger.io/api/v3
 
+# Backend URLs must be literal absolute URLs — APIM does NOT resolve
+# {{named-value}} tokens in a backend's url field.
 backends:
   - name: petstore-backend
     properties:
-      url: "{{petstore-backend-url}}"
+      url: https://petstore3.swagger.io/api/v3
 
 apis:
   - name: swagger-petstore
