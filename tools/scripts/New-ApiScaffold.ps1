@@ -114,7 +114,7 @@ New-File (Join-Path $apiRoot 'policy.xml') (@"
   <outbound>
     <base />
     <set-header name="X-Owner-Team" exists-action="override">
-      <value>{{platform-owner-team}}</value>
+      <value>api-platform</value>
     </set-header>
   </outbound>
   <on-error>

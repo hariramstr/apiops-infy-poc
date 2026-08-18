@@ -178,7 +178,7 @@ These are the pieces most APIs need. Copy the reference example under
   <outbound>
     <base />
     <set-header name="X-Owner-Team" exists-action="override">
-      <value>{{platform-owner-team}}</value>
+      <value>api-platform</value>
     </set-header>
   </outbound>
   <on-error>
@@ -267,6 +267,7 @@ Actions tab):
 |---|---|
 | Pipeline fails: *"Missing dev environment configuration: AZURE_CLIENT_SECRET"* | The secret was added as an **Environment variable** instead of an **Environment secret**. See [environment-setup.md](docs/environment-setup.md). |
 | Spectral step: *"No files found to lint"* | The API folder has no `specification.*` file, or the operation folder names don't match your `operationId`s. |
+| Publish fails: *"Cannot find a property '<name>'"* | The policy references a named value or policy fragment that isn't in the target APIM yet. Run the publisher once in **Publish all** mode, or avoid referencing artifacts that aren't published. |
 | Operation policy not applied | The `operations/<op>/` folder name must equal the `operationId` in the spec. |
 | Prod job never runs | Prod is waiting for a required reviewer, or the `prod` environment's branch rule doesn't include `main`. |
 | `pwsh: command not found` | Install [PowerShell 7](https://aka.ms/powershell). |
