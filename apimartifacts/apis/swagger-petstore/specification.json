@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Swagger Petstore Sample",
+    "title": "Swagger ISClaims",
     "description": "A small sample API used to validate the APIOps publishing workflow.",
     "version": "1.0.0",
     "contact": {
