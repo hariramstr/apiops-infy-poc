@@ -29,6 +29,38 @@ jobs:
     environment: dev # change this to match the dev environment created in settings 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate extractor configuration
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
+          API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          CONFIGURATION_YAML_PATH_INPUT: ${{ github.event.inputs.CONFIGURATION_YAML_PATH }}
+        run: |
+          $requiredVariables = @(
+            "AZURE_CLIENT_ID",
+            "AZURE_CLIENT_SECRET",
+            "AZURE_TENANT_ID",
+            "AZURE_SUBSCRIPTION_ID",
+            "AZURE_RESOURCE_GROUP_NAME",
+            "API_MANAGEMENT_SERVICE_NAME"
+          )
+          $missingVariables = $requiredVariables.Where({
+            [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+          })
+          if ($missingVariables.Count -gt 0) {
+            throw "Missing dev environment secrets: $($missingVariables -join ', ')"
+          }
+          if ($env:CONFIGURATION_YAML_PATH_INPUT -ne "Extract All APIs") {
+            $configurationPath = Join-Path "${{ GITHUB.WORKSPACE }}" $env:CONFIGURATION_YAML_PATH_INPUT
+            if (-not (Test-Path -LiteralPath $configurationPath -PathType Leaf)) {
+              throw "Extractor configuration file not found: $configurationPath"
+            }
+          }
+        shell: pwsh
           
       - name: Run extractor without Config Yaml
         if: ${{ github.event.inputs.CONFIGURATION_YAML_PATH == 'Extract All APIs' }}
