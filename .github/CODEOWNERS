@@ -1,0 +1,18 @@
+# Code ownership for APIOps artifacts.
+# GitHub uses this to auto-request the right reviewers on every pull request.
+# Replace the @placeholder handles below with your real GitHub teams/usernames.
+
+# Default owner for anything not matched by a rule below
+*                                     @platform-team
+
+# API teams own ONLY their own API folder (spec + api info + operation policies)
+/apimartifacts/apis/                  @api-teams
+
+# Shared, high-risk areas — senior/platform review required
+/apimartifacts/named values/          @platform-team
+/apimartifacts/backends/              @platform-team
+/apimartifacts/policy fragments/      @platform-team
+/apimartifacts/tags/                  @platform-team
+/configuration.prod.yaml              @platform-team
+/.github/                             @platform-team
+/tools/                               @platform-team

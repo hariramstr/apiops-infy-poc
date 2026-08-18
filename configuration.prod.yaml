@@ -1,6 +1,22 @@
 # Prod environment overrides for the APIOps publisher.
-# Minimal for the POC: the test API (Swagger Petstore) uses a shared public
-# backend, so no per-environment override is required. Add named values,
-# backends, loggers, diagnostics, or App Insights overrides here as real
-# environment-specific APIs are introduced.
+# The publisher applies these overrides on top of the artifacts in /apimartifacts
+# when API_MANAGEMENT_ENVIRONMENT == prod. Match resources by "name" and override
+# only the "properties" that differ per environment.
 apimServiceName: apim-apiops-prod-poc
+
+# Environment-driven backend routing. The backend URL and API service URL both
+# derive from this single named value, so promoting to prod changes it in one place.
+namedValues:
+  - name: petstore-backend-url
+    properties:
+      value: https://petstore3.swagger.io/api/v3
+
+backends:
+  - name: petstore-backend
+    properties:
+      url: "{{petstore-backend-url}}"
+
+apis:
+  - name: swagger-petstore
+    properties:
+      serviceUrl: https://petstore3.swagger.io/api/v3

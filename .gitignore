@@ -1,0 +1,36 @@
+# --- Secrets / credentials (NEVER commit) ---
+.env
+*.env
+*.pem
+*.key
+*.pfx
+*.publishsettings
+azureauth.json
+credentials.json
+secrets.*
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# --- Editor / IDE ---
+*.suo
+*.user
+.idea/
+*.code-workspace
+
+# --- Logs & temp ---
+*.log
+tmp/
+temp/
+
+# --- Node (only if you run Spectral locally) ---
+node_modules/
+
+# --- APIOps downloaded binaries (if extracted locally) ---
+extractor/
+publisher/
+*.zip
+
+# NOTE: apimartifacts/ and .vscode/tasks.json are intentionally tracked.

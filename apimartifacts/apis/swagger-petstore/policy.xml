@@ -1,0 +1,23 @@
+<policies>
+  <inbound>
+    <base />
+    <include-fragment fragment-id="correlation-id" />
+    <set-backend-service backend-id="petstore-backend" />
+    <set-header name="X-Api-Name" exists-action="override">
+      <value>swagger-petstore</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <forward-request />
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="X-Powered-By" exists-action="delete" />
+    <set-header name="X-Owner-Team" exists-action="override">
+      <value>{{platform-owner-team}}</value>
+    </set-header>
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

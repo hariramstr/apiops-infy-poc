@@ -1,0 +1,5 @@
+<fragment>
+  <set-header name="X-Correlation-Id" exists-action="skip">
+    <value>@(context.RequestId.ToString())</value>
+  </set-header>
+</fragment>

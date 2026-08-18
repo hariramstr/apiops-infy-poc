@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "APIOps: Add new API",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/tools/scripts/New-ApiScaffold.ps1"
+      ],
+      "problemMatcher": [],
+      "detail": "Answer a couple of questions to create a new API skeleton (files APIOps needs)."
+    },
+    {
+      "label": "APIOps: Validate artifacts",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/tools/scripts/Validate-Artifacts.ps1"
+      ],
+      "problemMatcher": [],
+      "detail": "Check that every API file is valid before you open a pull request."
+    }
+  ]
+}

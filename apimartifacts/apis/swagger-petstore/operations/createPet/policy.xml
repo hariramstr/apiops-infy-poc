@@ -1,0 +1,15 @@
+<policies>
+  <inbound>
+    <base />
+    <rate-limit-by-key calls="100" renewal-period="60" counter-key='@(context.Subscription?.Id ?? "anonymous")' />
+  </inbound>
+  <backend>
+    <forward-request />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

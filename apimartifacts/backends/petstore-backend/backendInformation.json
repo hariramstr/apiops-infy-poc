@@ -1,0 +1,7 @@
+{
+  "properties": {
+    "description": "Swagger Petstore backend. URL is environment-driven via the petstore-backend-url named value.",
+    "protocol": "http",
+    "url": "{{petstore-backend-url}}"
+  }
+}
